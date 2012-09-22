@@ -28,8 +28,8 @@ class Manager(object):
 		self.eventThread = threading.Thread(target=self.dispatchEvent)
 		self.messageThread.setDaemon(True)
 
-		# self.responseThread = threading.Thread(target=self.dispatchMessage)
-		# self.messageThread.setDaemon(True)
+		# self.responseThread = threading.Thread(target=self.dispatchResponse)
+		# self.responseThread.setDaemon(True)
 
 	def close(self):
 		self.messageThread.join()
@@ -78,9 +78,14 @@ class Manager(object):
 			event = self._eventQueue.get()
 			if not event:
 				continue
-			
 			print(event)
-			
+	
+	def dispatchResponse(self):
+		while True:
+			response = self._responseQueue.get()
+			if not response:
+				continue
+			print(response)
 
 	def read(self):
 		EOLLength = len(Message.EOL)
