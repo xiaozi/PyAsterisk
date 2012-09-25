@@ -25,19 +25,19 @@ class Manager(object):
 		
 		self._callbacks = {}
 
-		self.messageThread = threading.Thread(target=self.dispatchMessage)
-		self.messageThread.setDaemon(True)
+		self._messageThread = threading.Thread(target=self.dispatchMessage)
+		self._messageThread.setDaemon(True)
 
-		self.eventThread = threading.Thread(target=self.dispatchEvent)
-		self.eventThread.setDaemon(True)
+		self._eventThread = threading.Thread(target=self.dispatchEvent)
+		self._eventThread.setDaemon(True)
 
-		# self.responseThread = threading.Thread(target=self.dispatchResponse)
-		# self.responseThread.setDaemon(True)
+		# self._responseThread = threading.Thread(target=self.dispatchResponse)
+		# self._responseThread.setDaemon(True)
 
 	def loop(self):
-		self.messageThread.join()
-		self.eventThread.join()
-		# self.responseThread.join()
+		self._messageThread.join()
+		self._eventThread.join()
+		# self._responseThread.join()
 
 	def connect(self, host, port = 5038):
 		_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -45,12 +45,18 @@ class Manager(object):
 		self._socket = _socket
 		self._connected.set()
 
-		self.messageThread.start()
-		self.eventThread.start()
-		# self.responseThread.start()
+		self._messageThread.start()
+		self._eventThread.start()
+		# self._responseThread.start()
 
 	def close(self):
-		pass
+		if self._connected.isSet():
+			self.logoff()
+			self._connected.clear()
+		self._messageQueue.put(None)
+		self._messageThread.join()
+		if threading.currentThread() != self._eventThread:
+			self._eventThread.join()
 
 	def login(self, username, secret):
 		self.sendAction({
@@ -77,6 +83,8 @@ class Manager(object):
 		while True:
 			message = self._messageQueue.get()
 			if not message:
+				self._eventQueue.put(None)
+				# self._responseQueue.put(None)
 				break
 			fields = Message().parse(message)
 			if 'Event' in fields:
@@ -147,5 +155,5 @@ if __name__ == '__main__':
 	manager.login('xiaozi', 'born1990')
 
 	manager.registerEvent('ExtensionStatus', eventHandler)
-
 	manager.loop()
+	# manager.close()
