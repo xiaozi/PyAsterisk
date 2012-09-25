@@ -20,13 +20,15 @@ class Manager(object):
 
 		self._messageQueue = Queue.Queue()
 		self._eventQueue = Queue.Queue()
-		self._responseQueue = Queue.Queue()
+		# self._responseQueue = Queue.Queue()
+		
+		self._callbacks = {}
 
 		self.messageThread = threading.Thread(target=self.dispatchMessage)
 		self.messageThread.setDaemon(True)
 
 		self.eventThread = threading.Thread(target=self.dispatchEvent)
-		self.messageThread.setDaemon(True)
+		self.eventThread.setDaemon(True)
 
 		# self.responseThread = threading.Thread(target=self.dispatchResponse)
 		# self.responseThread.setDaemon(True)
@@ -43,6 +45,7 @@ class Manager(object):
 
 		self.messageThread.start()
 		self.eventThread.start()
+		# self.responseThread.start()
 
 	def login(self, username, secret):
 		self.sendAction({
@@ -68,8 +71,10 @@ class Manager(object):
 			fields = Message().parse(message)
 			if 'Event' in fields:
 				self._eventQueue.put(fields)
+			'''
 			if 'Response' in fields:
 				self._responseQueue.put(fields)
+			'''
 
 		readThread.join()
 
@@ -78,14 +83,30 @@ class Manager(object):
 			event = self._eventQueue.get()
 			if not event:
 				continue
-			print(event)
-	
+
+			callbacks = (self._callbacks.get(event['Event'], [])) + (self._callbacks.get('*', []))
+
+			for callback in callbacks:
+				if callback(event, self):
+					break
+	'''	
 	def dispatchResponse(self):
 		while True:
 			response = self._responseQueue.get()
 			if not response:
 				continue
 			print(response)
+	'''
+	
+	def registerEvent(self, event, func):
+		callbacks = self._callbacks.get(event, [])
+		callbacks.append(func)
+		self._callbacks[event] = callbacks
+
+	def unregisterEvent(self, event, func):
+		callbacks = self._callbacks.get(event, [])
+		callbacks.remove(func)
+		self._callbacks[event] = callbacks
 
 	def read(self):
 		EOLLength = len(Message.EOL)
@@ -106,10 +127,14 @@ class Manager(object):
 			currentMessage = currentMessage[EOMPosition + EOMLength: ]
 			self._messageQueue.put(message)
 
+def eventHandler(event, manager):
+	print(event['Exten'], ': ', event['Status'])
 
 if __name__ == '__main__':
 	manager = Manager()
 	manager.connect('127.0.0.1')
 	manager.login('xiaozi', 'born1990')
+
+	manager.registerEvent('ExtensionStatus', eventHandler)
 
 	manager.close()
