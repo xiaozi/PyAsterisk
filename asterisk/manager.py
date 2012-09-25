@@ -17,6 +17,7 @@ class Message(object):
 class Manager(object):
 	def __init__(self):
 		self._socket = None
+		self._connected = threading.Event()
 
 		self._messageQueue = Queue.Queue()
 		self._eventQueue = Queue.Queue()
@@ -33,7 +34,7 @@ class Manager(object):
 		# self.responseThread = threading.Thread(target=self.dispatchResponse)
 		# self.responseThread.setDaemon(True)
 
-	def close(self):
+	def loop(self):
 		self.messageThread.join()
 		self.eventThread.join()
 		# self.responseThread.join()
@@ -42,16 +43,25 @@ class Manager(object):
 		_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		_socket.connect((host, port))
 		self._socket = _socket
+		self._connected.set()
 
 		self.messageThread.start()
 		self.eventThread.start()
 		# self.responseThread.start()
+
+	def close(self):
+		pass
 
 	def login(self, username, secret):
 		self.sendAction({
 			'Action': 'Login',
 			'UserName': username,
 			'Secret': secret,
+		})
+
+	def logoff(self):
+		self.sendAction({
+			'Action': 'Logoff'
 		})
 
 	def sendAction(self, command):
@@ -67,7 +77,7 @@ class Manager(object):
 		while True:
 			message = self._messageQueue.get()
 			if not message:
-				continue
+				break
 			fields = Message().parse(message)
 			if 'Event' in fields:
 				self._eventQueue.put(fields)
@@ -82,7 +92,7 @@ class Manager(object):
 		while True:
 			event = self._eventQueue.get()
 			if not event:
-				continue
+				break
 
 			callbacks = (self._callbacks.get(event['Event'], [])) + (self._callbacks.get('*', []))
 
@@ -94,7 +104,7 @@ class Manager(object):
 		while True:
 			response = self._responseQueue.get()
 			if not response:
-				continue
+				break
 			print(response)
 	'''
 	
@@ -115,17 +125,18 @@ class Manager(object):
 		buff = self._socket.recv(1024)
 		currentMessage = buff[buff.find(Message.EOL) + EOLLength: ]
 
-		while True:
+		while self._connected.isSet():
 			buff = self._socket.recv(65535)
 			if not buff:
 				break
 			currentMessage += buff
+
 			EOMPosition = currentMessage.find(Message.EOM)
-			if EOMPosition == -1:
-				continue
-			message = currentMessage[0: EOMPosition]
-			currentMessage = currentMessage[EOMPosition + EOMLength: ]
-			self._messageQueue.put(message)
+			while EOMPosition != -1:
+				message = currentMessage[0: EOMPosition]
+				currentMessage = currentMessage[EOMPosition + EOMLength: ]
+				EOMPosition = currentMessage.find(Message.EOM)
+				self._messageQueue.put(message)
 
 def eventHandler(event, manager):
 	print(event['Exten'], ': ', event['Status'])
@@ -137,4 +148,4 @@ if __name__ == '__main__':
 
 	manager.registerEvent('ExtensionStatus', eventHandler)
 
-	manager.close()
+	manager.loop()
