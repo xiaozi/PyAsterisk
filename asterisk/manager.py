@@ -1,4 +1,5 @@
 import socket, threading, Queue
+import time
 
 class Message(object):
 	SEP = ':'
@@ -145,15 +146,21 @@ class Manager(object):
 				currentMessage = currentMessage[EOMPosition + EOMLength: ]
 				EOMPosition = currentMessage.find(Message.EOM)
 				self._messageQueue.put(message)
-
+	def __del__(self):
+		self.close()
 def eventHandler(event, manager):
 	print(event['Exten'], ': ', event['Status'])
 
 if __name__ == '__main__':
 	manager = Manager()
+
 	manager.connect('127.0.0.1')
 	manager.login('xiaozi', 'born1990')
 
 	manager.registerEvent('ExtensionStatus', eventHandler)
-	manager.loop()
+	# manager.loop()
+	
+	# sample
+	time.sleep(20)
+	# your can trigger the close method somewhere.
 	# manager.close()
